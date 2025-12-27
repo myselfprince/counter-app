@@ -96,9 +96,9 @@ export default function Home() {
         onClick={handleTap}
         className="w-64 h-64 rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 text-white flex flex-col items-center justify-center shadow-2xl active:scale-95 transition-transform"
       >
-        <span className="text-xl opacity-80">Today</span>
+        <span className="text-xl opacity-80">राधे राधे</span>
         <span className="text-8xl font-bold">{user.dailyCount}</span>
-        <span className="text-sm mt-2 opacity-80">Tap to increment</span>
+        <span className="text-sm mt-2 opacity-80">राधा कृष्ण</span>
       </button>
 
       {/* Stats Cards */}
