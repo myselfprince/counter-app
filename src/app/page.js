@@ -125,20 +125,20 @@ export default function Home() {
   // --- LOGIN SCREEN ---
   if (!user) {
     return (
-      <main className="flex min-h-screen flex-col items-center justify-center p-6 bg-gray-100">
-        <div className="bg-white p-8 rounded-xl shadow-lg w-full max-w-sm">
-          <h1 className="text-2xl font-bold mb-6 text-center text-black">
+      <main className="flex min-h-screen flex-col items-center justify-center p-6 bg-black">
+        <div className="bg-black p-8 rounded-xl shadow-lg w-full max-w-sm border">
+          <h1 className="text-2xl font-bold mb-6 text-center text-white">
             {authMode === 'login' ? 'Login' : 'Create Account'}
           </h1>
           <form action={handleAuth} className="flex flex-col gap-4">
-            <input name="username" placeholder="Username" required className="p-3 border rounded text-black" />
-            <input name="password" type="password" placeholder="Password" required className="p-3 border rounded text-black" />
+            <input name="username" placeholder="Username" required className="p-3 border rounded text-white bg-gray-700" />
+            <input name="password" type="password" placeholder="Password" required className="p-3 border rounded text-white bg-gray-700" />
             <button className="bg-blue-600 text-white p-3 rounded hover:bg-blue-700 font-bold">
               {authMode === 'login' ? 'Enter' : 'Sign Up'}
             </button>
             {error && <p className="text-red-500 text-sm text-center">{error}</p>}
           </form>
-          <p className="mt-4 text-center text-sm text-gray-600 cursor-pointer" 
+          <p className="mt-4 text-center text-sm text-white cursor-pointer" 
              onClick={() => setAuthMode(authMode === 'login' ? 'register' : 'login')}>
             {authMode === 'login' ? "New? Click to Register" : "Have an account? Login"}
           </p>
