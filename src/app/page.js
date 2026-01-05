@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { authUser, logout, getData, syncOfflineClicks, updateTargets } from './actions';
 
 export default function Home() {
@@ -9,137 +9,145 @@ export default function Home() {
   const [authMode, setAuthMode] = useState('login'); 
   const [error, setError] = useState('');
   
-  // NEW: Track clicks that haven't reached the server yet
+  // LOCAL STATE
   const [pendingClicks, setPendingClicks] = useState(0);
-  const [isSyncing, setIsSyncing] = useState(false);
-
-  // --- INITIAL LOAD & SYNC LOGIC ---
   
-  const loadAndSync = useCallback(async () => {
-    try {
-      // 1. Load pending clicks from LocalStorage immediately
-      const localPending = parseInt(localStorage.getItem('pendingClicks') || '0');
-      setPendingClicks(localPending);
+  // REFS (Used for logic that doesn't need to trigger re-renders)
+  const isSyncingRef = useRef(false);
 
-      // 2. Fetch latest Server Data
-      const serverData = await getData();
-      
-      if (serverData) {
-        // 3. If we have pending clicks and internet, try to sync immediately
-        if (localPending > 0 && navigator.onLine) {
-           await runSync(localPending, serverData);
+  // --- 1. INITIAL LOADING (Run once on mount) ---
+  useEffect(() => {
+    async function init() {
+      try {
+        // A. Load Local Pending Clicks immediately
+        const local = parseInt(localStorage.getItem('pendingClicks') || '0');
+        setPendingClicks(local);
+
+        // B. Fetch Server Data
+        const serverData = await getData();
+        if (serverData) {
+          setUser(serverData);
         } else {
-           // Just show data
-           setUser(serverData);
+          setUser(null);
         }
-      } else {
-        setUser(null); // Not logged in
+      } catch (err) {
+        console.error("Init failed", err);
+      } finally {
+        setLoading(false);
       }
-    } catch (err) {
-      console.error("Load failed", err);
-    } finally {
-      setLoading(false);
     }
+    init();
   }, []);
 
-  // Run on mount
+
+  // --- 2. PERIODIC SYNC & ONLINE LISTENER ---
   useEffect(() => {
-    loadAndSync();
+    // FUNCTION: The Sync Logic
+    const runSync = async () => {
+      // Guard clauses: Don't sync if already syncing, no internet, or no user
+      if (isSyncingRef.current || !navigator.onLine || !user) return;
+      
+      // Read directly from localStorage to get the absolute latest value
+      const currentPending = parseInt(localStorage.getItem('pendingClicks') || '0');
+      
+      if (currentPending <= 0) return; // Nothing to sync
 
-    // Add Event Listener for when Internet comes back
-    const handleOnline = () => loadAndSync();
-    window.addEventListener('online', handleOnline);
-    return () => window.removeEventListener('online', handleOnline);
-  }, [loadAndSync]);
+      try {
+        isSyncingRef.current = true;
+        
+        // Send data to server
+        const updatedUser = await syncOfflineClicks(currentPending);
+        
+        if (updatedUser) {
+          // SUCCESS: 
+          // 1. Update Server Data in State
+          setUser(updatedUser);
 
-
-  // --- SYNC HELPER ---
-  async function runSync(amountToSync, currentServerData) {
-    if (isSyncing) return;
-    setIsSyncing(true);
-
-    try {
-      // Call the new Bulk Action
-      const updatedUser = await syncOfflineClicks(amountToSync);
-      if (updatedUser) {
-        // Success: Update state, Clear LocalStorage
-        setUser(updatedUser);
-        setPendingClicks(0);
-        localStorage.setItem('pendingClicks', '0');
+          // 2. Safely subtract the amount we just sent from Pending Clicks
+          setPendingClicks(prev => {
+            const newVal = Math.max(0, prev - currentPending);
+            localStorage.setItem('pendingClicks', newVal.toString());
+            return newVal;
+          });
+        }
+      } catch (err) {
+        console.error("Sync failed, retrying later.");
+      } finally {
+        isSyncingRef.current = false;
       }
-    } catch (e) {
-      console.error("Sync failed, keeping data in localStorage");
-    } finally {
-      setIsSyncing(false);
-    }
-  }
+    };
+
+    // TRIGGER 1: Run every 5 seconds
+    const intervalId = setInterval(runSync, 5000);
+
+    // TRIGGER 2: Run immediately when Internet comes back
+    const handleOnline = () => runSync();
+    window.addEventListener('online', handleOnline);
+
+    return () => {
+      clearInterval(intervalId);
+      window.removeEventListener('online', handleOnline);
+    };
+  }, [user]); // Re-create listeners if user logs in/out
 
 
   // --- HANDLERS ---
-  
+
   async function handleAuth(formData) {
     formData.append('mode', authMode);
     const res = await authUser(formData);
     if (res?.error) {
       setError(res.error);
     } else {
-      loadAndSync(); 
+      // On successful login, fetch fresh data
+      const data = await getData();
+      setUser(data);
       setError('');
     }
   }
 
-  async function handleTap() {
-    // 1. Update UI Immediately (Optimistic)
+  function handleTap() {
+    // Optimistic Update: Update State & LocalStorage immediately
     setPendingClicks(prev => {
       const newVal = prev + 1;
       localStorage.setItem('pendingClicks', newVal.toString());
       return newVal;
     });
-
-    // 2. Debounce/Check Internet to Sync
-    // We wait 500ms to see if user taps again, or sync immediately if online
-    if (navigator.onLine) {
-      // We pass 1 because we just added 1. 
-      // Note: A robust system usually uses a queue, but for this simpler app:
-      // We will trigger a sync of ALL pending clicks in local storage.
-      
-      // Small timeout to allow rapid tapping without spamming the server
-      setTimeout(() => {
-        const currentPending = parseInt(localStorage.getItem('pendingClicks') || '0');
-        if (currentPending > 0) {
-           // We pass null for user data so it fetches fresh
-           runSync(currentPending, null);
-        }
-      }, 2000); // Sync every 2 seconds if tapping continuously
-    }
+    // We do NOT trigger sync here. The periodic timer handles it.
+    // This makes the UI extremely fast.
   }
 
   async function handleSettings(formData) {
     await updateTargets(formData);
-    loadAndSync();
+    // Refresh data after update
+    const data = await getData();
+    setUser(data);
     alert('Targets updated!');
   }
 
+
+  // --- RENDER ---
+
   if (loading) return <div className="p-10 flex justify-center text-white">Loading...</div>;
 
-  // --- LOGIN SCREEN ---
+  // LOGIN SCREEN
   if (!user) {
     return (
       <main className="flex min-h-screen flex-col items-center justify-center p-6 bg-black">
-        <div className="bg-black p-8 rounded-xl shadow-lg w-full max-w-sm border">
+        <div className="bg-black p-8 rounded-xl shadow-lg w-full max-w-sm border border-gray-800">
           <h1 className="text-2xl font-bold mb-6 text-center text-white">
             {authMode === 'login' ? 'Login' : 'Create Account'}
           </h1>
           <form action={handleAuth} className="flex flex-col gap-4">
-            <input name="username" placeholder="Username" required className="p-3 border rounded text-white bg-gray-700" />
-            <input name="password" type="password" placeholder="Password" required className="p-3 border rounded text-white bg-gray-700" />
+            <input name="username" placeholder="Username" required className="p-3 border rounded text-white bg-gray-900 border-gray-700" />
+            <input name="password" type="password" placeholder="Password" required className="p-3 border rounded text-white bg-gray-900 border-gray-700" />
             <button className="bg-blue-600 text-white p-3 rounded hover:bg-blue-700 font-bold">
               {authMode === 'login' ? 'Enter' : 'Sign Up'}
             </button>
             {error && <p className="text-red-500 text-sm text-center">{error}</p>}
           </form>
-          <p className="mt-4 text-center text-sm text-white cursor-pointer" 
-             onClick={() => setAuthMode(authMode === 'login' ? 'register' : 'login')}>
+          <p className="mt-4 text-center text-sm text-gray-400 cursor-pointer hover:text-white" 
+              onClick={() => setAuthMode(authMode === 'login' ? 'register' : 'login')}>
             {authMode === 'login' ? "New? Click to Register" : "Have an account? Login"}
           </p>
         </div>
@@ -147,10 +155,9 @@ export default function Home() {
     );
   }
 
-  // --- DASHBOARD SCREEN ---
-  
-  // CALCULATE DISPLAY VALUES
-  // Display = Server Value + Local Pending Value
+  // DASHBOARD SCREEN
+
+  // Logic: Total Display = What Server has + What we haven't sent yet
   const displayDaily = (user.dailyCount || 0) + pendingClicks;
   const displayTotal = (user.totalCount || 0) + pendingClicks;
 
@@ -163,11 +170,7 @@ export default function Home() {
       <div className="w-full max-w-md flex justify-between items-center mb-8">
         <div className='flex flex-col'>
              <h2 className="font-bold text-white">Hi, {user.username}</h2>
-             {pendingClicks > 0 && (
-               <span className="text-xs text-yellow-500">
-                 {isSyncing ? 'Syncing...' : 'Not Synced'} (+{pendingClicks})
-               </span>
-             )}
+             
         </div>
         <form action={async () => { await logout(); setUser(null); }}>
           <button className="text-sm text-red-500 hover:underline">Logout</button>
@@ -177,11 +180,12 @@ export default function Home() {
       {/* Main Counter Button */}
       <button 
         onClick={handleTap}
-        className="w-64 h-64 rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 text-white flex flex-col items-center justify-center shadow-2xl active:scale-95 transition-transform"
+        className="w-64 h-64 rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 text-white flex flex-col items-center justify-center shadow-2xl active:scale-95 transition-transform select-none touch-manipulation"
       >
-        <span className="text-xl opacity-80">राधे राधे</span>
-        <span className="text-8xl font-bold">{displayDaily}</span>
-        <span className="text-sm mt-2 opacity-80">राधा कृष्ण</span>
+        <span className="text-3xl opacity-80">राधे राधे</span>
+        {/* <span className="text-8xl font-bold">{displayDaily}</span> */}
+        <span className="text-5xl font-bold">राधा कृष्ण</span>
+        <span className="text-sm mt-2 opacity-80">{displayDaily}</span>
       </button>
 
       {/* Stats Cards */}
@@ -194,7 +198,7 @@ export default function Home() {
             <span>{Math.round(dailyProgress)}%</span>
           </div>
           <div className="w-full bg-gray-200 rounded-full h-2.5">
-            <div className="bg-green-500 h-2.5 rounded-full" style={{ width: `${dailyProgress}%` }}></div>
+            <div className="bg-green-500 h-2.5 rounded-full transition-all duration-300" style={{ width: `${dailyProgress}%` }}></div>
           </div>
         </div>
 
@@ -205,7 +209,7 @@ export default function Home() {
             <span>{Math.round(totalProgress)}%</span>
           </div>
           <div className="w-full bg-gray-200 rounded-full h-2.5">
-            <div className="bg-indigo-500 h-2.5 rounded-full" style={{ width: `${totalProgress}%` }}></div>
+            <div className="bg-indigo-500 h-2.5 rounded-full transition-all duration-300" style={{ width: `${totalProgress}%` }}></div>
           </div>
         </div>
         
@@ -222,7 +226,11 @@ export default function Home() {
             <button className="bg-gray-800 text-white p-2 rounded mt-2">Save Targets</button>
           </form>
         </details>
-
+        {pendingClicks > 0 && (
+                <span className="text-xs text-yellow-500 animate-pulse">
+                  Syncing {pendingClicks} clicks...
+                </span>
+             )}
       </div>
     </main>
   );
