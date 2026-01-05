@@ -82,10 +82,10 @@ export default function Home() {
   const totalProgress = Math.min((user.totalCount / user.finalTarget) * 100, 100);
 
   return (
-    <main className="flex min-h-screen flex-col items-center p-4 bg-gray-50 text-black">
+    <main className="flex min-h-screen flex-col items-center p-4 bg-black text-black">
       {/* Header */}
       <div className="w-full max-w-md flex justify-between items-center mb-8">
-        <h2 className="font-bold text-gray-700">Hi, {user.username}</h2>
+        <h2 className="font-bold text-white">Hi, {user.username}</h2>
         <form action={async () => { await logout(); setUser(null); }}>
           <button className="text-sm text-red-500 hover:underline">Logout</button>
         </form>
