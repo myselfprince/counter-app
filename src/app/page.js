@@ -180,7 +180,7 @@ export default function Home() {
       {/* Main Counter Button */}
       <button 
         onClick={handleTap}
-        className="w-64 h-64 rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 text-white flex flex-col items-center justify-center shadow-2xl active:scale-95 transition-transform select-none touch-manipulation"
+        className="w-64 h-64 rounded-full bg-black border border-gray-800 text-white flex flex-col items-center justify-center shadow-2xl active:scale-95 transition-transform select-none touch-manipulation"
       >
         <span className="text-3xl opacity-80">राधे राधे</span>
         {/* <span className="text-8xl font-bold">{displayDaily}</span> */}
@@ -192,29 +192,29 @@ export default function Home() {
       <div className="w-full max-w-md mt-10 grid gap-4">
         
         {/* Daily Target */}
-        <div className="bg-white p-4 rounded-lg shadow-sm">
+        <div className="bg-black border border-gray-700 p-4 rounded-lg shadow-sm text-gray-700">
           <div className="flex justify-between text-sm mb-1">
             <span>Daily Goal: {user.dailyTarget}</span>
             <span>{Math.round(dailyProgress)}%</span>
           </div>
-          <div className="w-full bg-gray-200 rounded-full h-2.5">
+          <div className=" w-full bg-gray-800 rounded-full h-2.5 bg-gray-600">
             <div className="bg-green-500 h-2.5 rounded-full transition-all duration-300" style={{ width: `${dailyProgress}%` }}></div>
           </div>
         </div>
 
         {/* Final Target */}
-        <div className="bg-white p-4 rounded-lg shadow-sm">
+        <div className="p-4 rounded-lg shadow-sm bg-black border text-gray-700 border-gray-700">
           <div className="flex justify-between text-sm mb-1">
             <span>Lifetime Total: {displayTotal} / {user.finalTarget}</span>
             <span>{Math.round(totalProgress)}%</span>
           </div>
-          <div className="w-full bg-gray-200 rounded-full h-2.5">
-            <div className="bg-indigo-500 h-2.5 rounded-full transition-all duration-300" style={{ width: `${totalProgress}%` }}></div>
+          <div className="w-full bg-gray-800  rounded-full h-2.5">
+            <div className="bg-indigo-500  h-2.5 rounded-full transition-all duration-300" style={{ width: `${totalProgress}%` }}></div>
           </div>
         </div>
         
         {/* Settings */}
-        <details className="mt-6 bg-white p-4 rounded-lg shadow-sm">
+        <details className="mt-6 bg-black border text-white p-4 rounded-lg shadow-sm border-gray-700">
           <summary className="cursor-pointer font-medium text-gray-600">Settings & Targets</summary>
           <form action={handleSettings} className="mt-4 flex flex-col gap-3">
             <label className="text-sm">Daily Target</label>
